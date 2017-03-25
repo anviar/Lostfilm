@@ -1,0 +1,11 @@
+url: http://retre.org/rssdd.xml
+auth:
+  uid:
+  usess:
+subscriptions:
+  Iron Fist: 1080p
+transmission:
+  host: localhost
+  port: 9091
+  user:
+  password:
