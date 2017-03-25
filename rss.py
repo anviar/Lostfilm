@@ -13,16 +13,27 @@ transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(c
                    + '/transmission/rpc/'
 
 def transmission_rpc_request(data):
-    torrent_request = requests.post(transmission_url, data=data)
-    if torrent_request.status_code == 409:
+   torrent_request = requests.post(
+                                   transmission_url,
+                                   data=data,
+                                   auth=(config['transmission']['user'],config['transmission']['password'])
+                                   )
+   if torrent_request.status_code == 409:
         torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)', torrent_request.text)
         if torrent_session_search:
             torrent_request = requests.post(
                 transmission_url,
                 data=data,
-                headers={'X-Transmission-Session-Id': torrent_session_search.group(0).split(':')[1].strip()}
+                headers={'X-Transmission-Session-Id': torrent_session_search.group(0).split(':')[1].strip()},
+                auth=(config['transmission']['user'], config['transmission']['password'])
             )
-    return (json.loads(torrent_request.text))
+        if torrent_request.status_code == 401:
+            print('Unauthorized')
+            exit(1)
+   if torrent_request.status_code == 401:
+       print('Unauthorized')
+       exit(1)
+   return (json.loads(torrent_request.text))
 request_available_torrents=transmission_rpc_request(
     json.dumps({
             'arguments': {
