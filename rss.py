@@ -62,6 +62,8 @@ if request_available_torrents.get('result') == 'success':
         quality = data.split('.')[-1]
         series = data.split('.')[-2]
         name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
+        if name in config['aliases']:
+            name = config['aliases'][name]
         if name not in catalog:
             catalog.update({name: {series}})
         else:
@@ -121,3 +123,5 @@ for item in rss_items:
     answer = transmission_rpc_request(torrent_rpc)
     if args.debug:
         print("Request: %s\nAnswer: %s" % (torrent_rpc, answer))
+if args.debug:
+    input("Press ENTER to continue")

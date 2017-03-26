@@ -4,6 +4,8 @@ auth:
   usess:
 subscriptions:
   Iron Fist: 1080p
+aliases:
+  Marvels Iron Fist: Iron Fist
 transmission:
   host: localhost
   port: 9091
