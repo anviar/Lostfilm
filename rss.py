@@ -6,31 +6,31 @@ import argparse
 from yaml import load as yaml_load
 from xml.etree import ElementTree
 
-with open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'config.yml'), 'r') as yaml_config:
+with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.yml'), 'r') as yaml_config:
     config = yaml_load(yaml_config)
 
 # Preparing arguments
-argparser=argparse.ArgumentParser(description='Rescan Lostfilm.TV RSS feed for updates')
-argparser.add_argument('-d','--debug', help='debug output', action="store_true")
+argparser = argparse.ArgumentParser(description='Rescan Lostfilm.TV RSS feed for updates')
+argparser.add_argument('-d', '--debug', help='debug output', action="store_true")
 args = argparser.parse_args()
 
-
-cookies=';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
+cookies = ';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
 transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(config['transmission']['port']) \
                    + '/transmission/rpc/'
 
-def transmission_rpc_request(data):
-   torrent_request = requests.post(
-                                   transmission_url,
-                                   data=data,
-                                   auth=(config['transmission']['user'],config['transmission']['password'])
-                                   )
-   if torrent_request.status_code == 409:
+
+def transmission_rpc_request(rpc_data) -> json:
+    torrent_request = requests.post(
+        transmission_url,
+        data=rpc_data,
+        auth=(config['transmission']['user'], config['transmission']['password'])
+    )
+    if torrent_request.status_code == 409:
         torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)', torrent_request.text)
         if torrent_session_search:
             torrent_request = requests.post(
                 transmission_url,
-                data=data,
+                data=rpc_data,
                 headers={'X-Transmission-Session-Id': torrent_session_search.group(0).split(':')[1].strip()},
                 auth=(config['transmission']['user'], config['transmission']['password'])
             )
@@ -38,30 +38,32 @@ def transmission_rpc_request(data):
             if args.debug:
                 print('Unauthorized')
             exit(1)
-   if torrent_request.status_code == 401:
+    if torrent_request.status_code == 401:
         if args.debug:
             print('Unauthorized')
         exit(1)
-   return (json.loads(torrent_request.text))
-request_available_torrents=transmission_rpc_request(
+    return json.loads(torrent_request.text)
+
+
+request_available_torrents = transmission_rpc_request(
     json.dumps({
-            'arguments': {
-                'fields': ['name']
-            },
-            'method': 'torrent-get'
-            })
-        )
-if request_available_torrents.get('result')=='success':
-    catalog=dict()
+        'arguments': {
+            'fields': ['name']
+        },
+        'method': 'torrent-get'
+    })
+)
+if request_available_torrents.get('result') == 'success':
+    catalog = dict()
     for job in request_available_torrents.get('arguments').get('torrents'):
         if 'LostFilm' not in job['name']:
             continue
-        data=job['name'].split('.rus.LostFilm.TV.')[0]
+        data = job['name'].split('.rus.LostFilm.TV.')[0]
         quality = data.split('.')[-1]
         series = data.split('.')[-2]
-        name = data.replace(quality,'').replace(series,'').strip('.').replace('.',' ')
+        name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
         if name not in catalog:
-            catalog.update({name: {series} })
+            catalog.update({name: {series}})
         else:
             catalog[name].add(series)
 else:
@@ -76,7 +78,7 @@ rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('i
 for item in rss_items:
     title = item.find('title').text
     link = item.find('link').text
-    search_real_name = re.search("\(.*\)" , title.split('.')[0])
+    search_real_name = re.search("\(.*\)", title.split('.')[0])
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
         if real_name not in config['subscriptions']:
@@ -98,7 +100,7 @@ for item in rss_items:
         if args.debug:
             print("Skipped (can't detect quality): " + title)
         continue
-    search_series = re.search("\(.*\)" , title.split('.')[1])
+    search_series = re.search("\(.*\)", title.split('.')[1])
     if search_series:
         series = search_series.group(0).strip('()')
     else:
@@ -110,12 +112,12 @@ for item in rss_items:
             print("Skipped (already added): " + title)
         continue
     torrent_rpc = json.dumps({
-                            'arguments': {
-                                            'cookies': cookies,
-                                            'filename': link
-                                         },
-                            'method': 'torrent-add'
-                            })
+        'arguments': {
+            'cookies': cookies,
+            'filename': link
+        },
+        'method': 'torrent-add'
+    })
     answer = transmission_rpc_request(torrent_rpc)
     if args.debug:
-        print("Request: %s\nAnswer: %s" % (torrent_rpc,answer))
+        print("Request: %s\nAnswer: %s" % (torrent_rpc, answer))
