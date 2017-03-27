@@ -3,6 +3,7 @@ import os
 import re
 import json
 import argparse
+import logging
 from yaml import load as yaml_load
 from xml.etree import ElementTree
 
@@ -10,10 +11,20 @@ with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.yml'
     config = yaml_load(yaml_config)
 
 # Preparing arguments
-argparser = argparse.ArgumentParser(description='Rescan Lostfilm.TV RSS feed for updates')
-argparser.add_argument('-d', '--debug', help='debug output', action="store_true")
+argparser = argparse.ArgumentParser(description='Fetch content from Lostfilm.TV RSS feed')
+argparser.add_argument('--log-level', help='debug level', type=str,
+                       choices=['debug', 'info', 'warning', 'error'], default='error')
+argparser.add_argument('--log-save', help='save log file', action="store_true")
 args = argparser.parse_args()
 
+if args.log_save:
+    logging.basicConfig(
+        filename=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rss.log'),
+        format='%(asctime)s %(message)s',
+        level=args.log_level.upper()
+    )
+else:
+    logging.basicConfig(level=args.log_level.upper())
 cookies = ';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
 transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(config['transmission']['port']) \
                    + '/transmission/rpc/'
@@ -35,12 +46,10 @@ def transmission_rpc_request(rpc_data) -> json:
                 auth=(config['transmission']['user'], config['transmission']['password'])
             )
         if torrent_request.status_code == 401:
-            if args.debug:
-                print('Unauthorized')
+            logging.error('Unauthorized')
             exit(1)
     if torrent_request.status_code == 401:
-        if args.debug:
-            print('Unauthorized')
+        logging.error('Unauthorized')
         exit(1)
     return json.loads(torrent_request.text)
 
@@ -69,10 +78,10 @@ if request_available_torrents.get('result') == 'success':
         else:
             catalog[name].add(series)
 else:
-    if args.debug:
-        print('Can not send request to transmission')
+    logging.error('Can not send request to transmission')
     exit(1)
 
+logging.debug("Catalog: " + str(catalog))
 list_request = requests.get(config['url'])
 list_request.encoding = 'utf-8'
 rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('item')
@@ -84,34 +93,29 @@ for item in rss_items:
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
         if real_name not in config['subscriptions']:
-            if args.debug:
-                print("Skipped (not subscribed): " + title)
+            logging.debug("Skipped (not subscribed): " + title)
             continue
     else:
-        if args.debug:
-            print("Skipped (can't find name): " + title)
+        logging.warning("Skipped (can't find name): " + title)
         continue
     search_quality = re.search("\[.*\]", title.split('.')[1])
     if search_quality:
         quality = search_quality.group(0).strip('[]')
         if quality != config['subscriptions'][real_name]:
-            if args.debug:
-                print("Skipped (wrong quality): " + title)
+            logging.debug("Skipped (wrong quality): " + title)
             continue
     else:
         if args.debug:
-            print("Skipped (can't detect quality): " + title)
+            logging.warning("Skipped (can't detect quality): " + title)
         continue
     search_series = re.search("\(.*\)", title.split('.')[1])
     if search_series:
         series = search_series.group(0).strip('()')
     else:
-        if args.debug:
-            print("Skipped (can't parse series number): " + title)
+        logging.warning("Skipped (can't parse series number): " + title)
         continue
     if real_name in catalog and series in catalog[real_name]:
-        if args.debug:
-            print("Skipped (already added): " + title)
+        logging.debug("Skipped (already added): " + title)
         continue
     torrent_rpc = json.dumps({
         'arguments': {
@@ -121,7 +125,4 @@ for item in rss_items:
         'method': 'torrent-add'
     })
     answer = transmission_rpc_request(torrent_rpc)
-    if args.debug:
-        print("Request: %s\nAnswer: %s" % (torrent_rpc, answer))
-if args.debug:
-    input("Press ENTER to continue")
+    logging.info("Added " + title)
