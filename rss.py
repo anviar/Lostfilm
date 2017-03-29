@@ -98,17 +98,16 @@ for item in rss_items:
     else:
         logging.warning("Skipped (can't find name): " + title)
         continue
-    search_quality = re.search("\[.*\]", title.split('.')[1])
+    search_quality = re.search("\[.*\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
         if quality != config['subscriptions'][real_name]:
             logging.debug("Skipped (wrong quality): " + title)
             continue
     else:
-        if args.debug:
-            logging.warning("Skipped (can't detect quality): " + title)
+        logging.warning("Skipped (can't detect quality): " + title)
         continue
-    search_series = re.search("\(.*\)", title.split('.')[1])
+    search_series = re.search("\(S[0-9]+E[0-9]+\)", title)
     if search_series:
         series = search_series.group(0).strip('()')
     else:
