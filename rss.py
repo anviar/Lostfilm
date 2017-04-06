@@ -11,7 +11,7 @@ with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.yml'
     config = yaml_load(yaml_config)
 
 # Preparing arguments
-argparser = argparse.ArgumentParser(description='Fetch content from Lostfilm.TV RSS feed')
+argparser = argparse.ArgumentParser(description='Загрузить обновления с Lostfilm.TV RSS ленты')
 argparser.add_argument('--log-level', help='debug level', type=str,
                        choices=['debug', 'info', 'warning', 'error'], default='error')
 argparser.add_argument('--log-save', help='save log file', action="store_true")
@@ -46,10 +46,10 @@ def transmission_rpc_request(rpc_data) -> json:
                 auth=(config['transmission']['user'], config['transmission']['password'])
             )
         if torrent_request.status_code == 401:
-            logging.error('Unauthorized')
+            logging.error('Не авторизован в Transmission')
             exit(1)
     if torrent_request.status_code == 401:
-        logging.error('Unauthorized')
+        logging.error('Не авторизован в Transmission')
         exit(1)
     return json.loads(torrent_request.text)
 
@@ -78,10 +78,10 @@ if request_available_torrents.get('result') == 'success':
         else:
             catalog[name].add(series)
 else:
-    logging.error('Can not send request to transmission')
+    logging.error('Не могу отправить запрос к transmission')
     exit(1)
 
-logging.debug("Catalog: " + str(catalog))
+logging.debug("Каталог: " + str(catalog))
 list_request = requests.get(config['url'])
 list_request.encoding = 'utf-8'
 rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('item')
@@ -93,28 +93,28 @@ for item in rss_items:
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
         if real_name not in config['subscriptions']:
-            logging.debug("Skipped (not subscribed): " + title)
+            logging.debug("Не подписан <%s>: %s " % (real_name, title, ))
             continue
     else:
-        logging.warning("Skipped (can't find name): " + title)
+        logging.warning("Не получилось найти имя: " + title)
         continue
     search_quality = re.search("\[.*\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
         if quality != config['subscriptions'][real_name]:
-            logging.debug("Skipped (wrong quality): " + title)
+            logging.debug("Не то качество <%s>: %s" % (quality, title, ))
             continue
     else:
-        logging.warning("Skipped (can't detect quality): " + title)
+        logging.warning("Не смог определить качество: " + title)
         continue
     search_series = re.search("\(S[0-9]+E[0-9]+\)", title)
     if search_series:
         series = search_series.group(0).strip('()')
     else:
-        logging.warning("Skipped (can't parse series number): " + title)
+        logging.warning("Не смог найти серию: " + title)
         continue
     if real_name in catalog and series in catalog[real_name]:
-        logging.debug("Skipped (already added): " + title)
+        logging.debug("Уже добавлено: " + title)
         continue
     torrent_rpc = json.dumps({
         'arguments': {
@@ -124,4 +124,4 @@ for item in rss_items:
         'method': 'torrent-add'
     })
     answer = transmission_rpc_request(torrent_rpc)
-    logging.info("Added " + title)
+    logging.info("Добавлено " + title)
