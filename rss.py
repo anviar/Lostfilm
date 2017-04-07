@@ -53,6 +53,20 @@ def transmission_rpc_request(rpc_data) -> json:
         exit(1)
     return json.loads(torrent_request.text)
 
+request_download_root = transmission_rpc_request(
+    json.dumps({
+        'arguments': {
+            'fields': ['download-dir']
+        },
+        'method': 'session-get'
+    })
+)
+if request_download_root['result'] == 'success':
+    download_root = request_download_root['arguments']['download-dir']
+    logging.debug("Директория: " + str(download_root))
+else:
+    logging.error('Не могу отправить запрос к transmission')
+    exit(1)
 
 request_available_torrents = transmission_rpc_request(
     json.dumps({
@@ -62,9 +76,9 @@ request_available_torrents = transmission_rpc_request(
         'method': 'torrent-get'
     })
 )
-if request_available_torrents.get('result') == 'success':
+if request_available_torrents['result'] == 'success':
     catalog = dict()
-    for job in request_available_torrents.get('arguments').get('torrents'):
+    for job in request_available_torrents['arguments']['torrents']:
         if 'LostFilm' not in job['name']:
             continue
         data = job['name'].split('.rus.LostFilm.TV.')[0]
@@ -119,9 +133,10 @@ for item in rss_items:
     torrent_rpc = json.dumps({
         'arguments': {
             'cookies': cookies,
-            'filename': link
+            'filename': link,
+            'download-dir': os.path.join(download_root, real_name)
         },
         'method': 'torrent-add'
     })
-    answer = transmission_rpc_request(torrent_rpc)
+    transmission_rpc_request(torrent_rpc)
     logging.info("Добавлено " + title)
