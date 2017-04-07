@@ -103,7 +103,7 @@ rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('i
 for item in rss_items:
     title = item.find('title').text
     link = item.find('link').text
-    search_real_name = re.search("\(.*\)", title.split('.')[0])
+    search_real_name = re.search("\([a-zA-Z0-9. ]+\)", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
         if real_name not in config['subscriptions']:
@@ -134,7 +134,7 @@ for item in rss_items:
         'arguments': {
             'cookies': cookies,
             'filename': link,
-            'download-dir': os.path.join(download_root, real_name)
+            'download-dir': os.path.join(download_root, real_name.strip('.'))
         },
         'method': 'torrent-add'
     })
