@@ -7,16 +7,18 @@ import logging
 from yaml import load as yaml_load
 from xml.etree import ElementTree
 
+# Парсинг настроек
 with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.yml'), 'r') as yaml_config:
     config = yaml_load(yaml_config)
 
-# Preparing arguments
+# Подготовка аргументов командной строки
 argparser = argparse.ArgumentParser(description='Загрузить обновления с Lostfilm.TV RSS ленты')
 argparser.add_argument('--log-level', help='debug level', type=str,
                        choices=['debug', 'info', 'warning', 'error'], default='error')
 argparser.add_argument('--log-save', help='save log file', action="store_true")
 args = argparser.parse_args()
 
+# настройка логирования
 if args.log_save:
     logging.basicConfig(
         filename=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rss.log'),
@@ -25,11 +27,15 @@ if args.log_save:
     )
 else:
     logging.basicConfig(level=args.log_level.upper())
+
+# Cookie для авторизации на трекере
 cookies = ';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
+
+# Строка подключения к transmission RPC
 transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(config['transmission']['port']) \
                    + '/transmission/rpc/'
 
-
+# Функция запроса transmission RPC
 def transmission_rpc_request(rpc_data) -> json:
     torrent_request = requests.post(
         transmission_url,
@@ -53,6 +59,7 @@ def transmission_rpc_request(rpc_data) -> json:
         exit(1)
     return json.loads(torrent_request.text)
 
+# Запрос директории загрузки по-умолчанию
 request_download_root = transmission_rpc_request(
     json.dumps({
         'arguments': {
@@ -68,6 +75,7 @@ else:
     logging.error('Не могу отправить запрос к transmission')
     exit(1)
 
+# Формируем каталог уже загруженных файлов
 request_available_torrents = transmission_rpc_request(
     json.dumps({
         'arguments': {
@@ -85,6 +93,7 @@ if request_available_torrents['result'] == 'success':
         quality = data.split('.')[-1]
         series = data.split('.')[-2]
         name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
+        # Обработка нестандартного именования серий
         if name in config['aliases']:
             name = config['aliases'][name]
         if name not in catalog:
@@ -94,8 +103,9 @@ if request_available_torrents['result'] == 'success':
 else:
     logging.error('Не могу отправить запрос к transmission')
     exit(1)
-
 logging.debug("Каталог: " + str(catalog))
+
+# Запрос RSS ленты
 list_request = requests.get(config['url'])
 list_request.encoding = 'utf-8'
 rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('item')
@@ -103,6 +113,7 @@ rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('i
 for item in rss_items:
     title = item.find('title').text
     link = item.find('link').text
+
     search_real_name = re.search("\([a-zA-Z0-9. ]+\)", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
@@ -112,7 +123,8 @@ for item in rss_items:
     else:
         logging.warning("Не получилось найти имя: " + title)
         continue
-    search_quality = re.search("\[.*\]", title)
+
+    search_quality = re.search("\[.+\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
         if quality != config['subscriptions'][real_name]:
@@ -121,20 +133,25 @@ for item in rss_items:
     else:
         logging.warning("Не смог определить качество: " + title)
         continue
+
     search_series = re.search("\(S[0-9]+E[0-9]+\)", title)
     if search_series:
         series = search_series.group(0).strip('()')
     else:
         logging.warning("Не смог найти серию: " + title)
         continue
+
+    logging.debug("Имя: \"%s\" Серия: \"%s\" Качество: \"%s\"" % (real_name, series, quality,))
     if real_name in catalog and series in catalog[real_name]:
         logging.debug("Уже добавлено: " + title)
         continue
+
+    # Если удовлетворяет всем условиям, то добавляем в очередь загрузки
     torrent_rpc = json.dumps({
         'arguments': {
             'cookies': cookies,
             'filename': link,
-            'download-dir': os.path.join(download_root, real_name.strip('.'))
+            'download-dir': os.path.join(download_root, real_name.strip('.')) # Имя директории не может оканьчиваться точкой
         },
         'method': 'torrent-add'
     })
