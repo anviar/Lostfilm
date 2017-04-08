@@ -36,26 +36,26 @@ transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(c
                    + '/transmission/rpc/'
 
 # Функция запроса transmission RPC
+transmission_session_id = None
 def transmission_rpc_request(rpc_data) -> json:
-    torrent_request = requests.post(
-        transmission_url,
-        data=rpc_data,
-        auth=(config['transmission']['user'], config['transmission']['password'])
-    )
-    if torrent_request.status_code == 409:
-        torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)', torrent_request.text)
-        if torrent_session_search:
-            torrent_request = requests.post(
-                transmission_url,
-                data=rpc_data,
-                headers={'X-Transmission-Session-Id': torrent_session_search.group(0).split(':')[1].strip()},
-                auth=(config['transmission']['user'], config['transmission']['password'])
-            )
-        if torrent_request.status_code == 401:
+    global transmission_session_id
+    for counter in range(0,2):
+        torrent_request = requests.post(
+            transmission_url,
+            data=rpc_data,
+            headers={'X-Transmission-Session-Id': transmission_session_id},
+            auth=(config['transmission']['user'], config['transmission']['password'])
+        )
+        if torrent_request.status_code == 200:
+            break
+        elif torrent_request.status_code == 401:
             logging.error('Не авторизован в Transmission')
             exit(1)
-    if torrent_request.status_code == 401:
-        logging.error('Не авторизован в Transmission')
+        torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)', torrent_request.text)
+        if torrent_session_search:
+            transmission_session_id = torrent_session_search.group(0).split(':')[1].strip()
+    if torrent_request.status_code != 200:
+        logging.error('Не Удаётся выполнть запрос к Transmission')
         exit(1)
     return json.loads(torrent_request.text)
 
