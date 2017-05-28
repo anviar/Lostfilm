@@ -140,7 +140,9 @@ for item in rss_items:
     else:
         logging.warning("Не смог найти серию: " + title)
         continue
-
+    if series.endswith('E99'):
+        logging.warning("Сезон: " + title)
+        continue
     logging.debug("Имя: \"%s\" Серия: \"%s\" Качество: \"%s\"" % (real_name, series, quality,))
     if real_name in catalog and series in catalog[real_name]:
         logging.debug("Уже добавлено: " + title)
