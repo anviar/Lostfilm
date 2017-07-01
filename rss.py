@@ -39,7 +39,7 @@ transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(c
 transmission_session_id = None
 def transmission_rpc_request(rpc_data) -> json:
     global transmission_session_id
-    for counter in range(0,2):
+    for counter in range(0, 2):
         torrent_request = requests.post(
             transmission_url,
             data=rpc_data,
@@ -117,7 +117,7 @@ for item in rss_items:
     search_real_name = re.search("(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
-        if real_name not in config['subscriptions']:
+        if real_name not in config['subscriptions'] and real_name not in config['subscriptions_season']:
             logging.debug("Не подписан <%s>: %s " % (real_name, title, ))
             continue
     else:
@@ -127,7 +127,9 @@ for item in rss_items:
     search_quality = re.search("\[.+\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
-        if quality != config['subscriptions'][real_name]:
+        if (real_name in config['subscriptions'] and quality != config['subscriptions'][real_name]
+            or (real_name in config['subscriptions_season'] and quality != config['subscriptions_season'][real_name])
+        ):
             logging.debug("Не то качество <%s>: %s" % (quality, title, ))
             continue
     else:
@@ -140,7 +142,7 @@ for item in rss_items:
     else:
         logging.warning("Не смог найти серию: " + title)
         continue
-    if series.endswith('E99'):
+    if series.endswith('E99') and real_name not in config['subscriptions_season']:
         logging.warning("Сезон: " + title)
         continue
     logging.debug("Имя: \"%s\" Серия: \"%s\" Качество: \"%s\"" % (real_name, series, quality,))
