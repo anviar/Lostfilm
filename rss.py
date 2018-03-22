@@ -4,17 +4,21 @@ import re
 import json
 import argparse
 import logging
+from sys import stdout
 from yaml import load as yaml_load
 from xml.etree import ElementTree
 
 # Парсинг настроек
-with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.yml'), 'r') as yaml_config:
-    config = yaml_load(yaml_config)
+with open(
+    os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        'config.yml'), 'r') as yaml_config:
+            config = yaml_load(yaml_config)
 
 # Подготовка аргументов командной строки
 argparser = argparse.ArgumentParser(description='Загрузить обновления с Lostfilm.TV RSS ленты')
 argparser.add_argument('--log-level', help='debug level', type=str,
-                       choices=['debug', 'info', 'warning', 'error'], default='error')
+                       choices=['debug', 'info', 'warning', 'error'], default='debug')
 argparser.add_argument('--log-save', help='save log file', action="store_true")
 args = argparser.parse_args()
 
@@ -23,6 +27,7 @@ if args.log_save:
     logging.basicConfig(
         filename=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rss.log'),
         format='%(asctime)s %(message)s',
+        stream=stdout,
         level=args.log_level.upper()
     )
 else:
@@ -32,11 +37,15 @@ else:
 cookies = ';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
 
 # Строка подключения к transmission RPC
-transmission_url = 'http://' + str(config['transmission']['host']) + ':' + str(config['transmission']['port']) \
-                   + '/transmission/rpc/'
+transmission_url = 'http://{host}:{port}/transmission/rpc/'.format(
+    host=config['transmission']['host'],
+    port=config['transmission']['port'])
+
 
 # Функция запроса transmission RPC
 transmission_session_id = None
+
+
 def transmission_rpc_request(rpc_data) -> json:
     global transmission_session_id
     for counter in range(0, 2):
@@ -51,13 +60,15 @@ def transmission_rpc_request(rpc_data) -> json:
         elif torrent_request.status_code == 401:
             logging.error('Не авторизован в Transmission')
             exit(1)
-        torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)', torrent_request.text)
+        torrent_session_search = re.search('X-Transmission-Session-Id: .+?(?=<)',
+                                           torrent_request.text)
         if torrent_session_search:
             transmission_session_id = torrent_session_search.group(0).split(':')[1].strip()
     if torrent_request.status_code != 200:
         logging.error('Не Удаётся выполнть запрос к Transmission')
         exit(1)
     return json.loads(torrent_request.text)
+
 
 # Запрос директории загрузки по-умолчанию
 request_download_root = transmission_rpc_request(
@@ -117,8 +128,13 @@ for item in rss_items:
     search_real_name = re.search("(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
-        if real_name not in config['subscriptions'] and real_name not in config['subscriptions_season']:
-            logging.debug("Не подписан <%s>: %s " % (real_name, title, ))
+        if (
+            real_name not in config['subscriptions'] and
+            real_name not in config['subscriptions_season']
+        ):
+            logging.debug("Не подписан <{real_name}>: {title}".format(
+                          real_name=real_name,
+                          title=title))
             continue
     else:
         logging.warning("Не получилось найти имя: " + title)
@@ -127,9 +143,11 @@ for item in rss_items:
     search_quality = re.search("\[.+\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
-        if (real_name in config['subscriptions'] and quality != config['subscriptions'][real_name]
-            or (real_name in config['subscriptions_season'] and quality != config['subscriptions_season'][real_name])
-        ):
+        if (real_name in config['subscriptions'] and
+            quality != config['subscriptions'][real_name] or
+            (
+                real_name in config['subscriptions_season'] and
+                quality != config['subscriptions_season'][real_name])):
             logging.debug("Не то качество <%s>: %s" % (quality, title, ))
             continue
     else:
@@ -145,7 +163,10 @@ for item in rss_items:
     if series.endswith('E99') and real_name not in config['subscriptions_season']:
         logging.debug("Сезон: " + title)
         continue
-    logging.debug("Имя: \"%s\" Серия: \"%s\" Качество: \"%s\"" % (real_name, series, quality,))
+    logging.debug('Имя: {real_name} Серия: {quality} Качество: {quality}'.format(
+                  real_name=real_name,
+                  series=series,
+                  quality=quality))
     if real_name in catalog and series in catalog[real_name]:
         logging.debug("Уже добавлено: " + title)
         continue
@@ -159,7 +180,8 @@ for item in rss_items:
         'arguments': {
             'cookies': cookies,
             'filename': link,
-            'download-dir': os.path.join(download_root, real_name.strip('.')) # Имя директории не может оканьчиваться точкой
+            # Имя директории не может оканьчиваться точкой
+            'download-dir': os.path.join(download_root, real_name.strip('.'))
         },
         'method': 'torrent-add'
     })
