@@ -2,9 +2,8 @@ import requests
 import os
 import re
 import json
-import argparse
 import logging
-from sys import stdout
+from logging.handlers import RotatingFileHandler
 from yaml import load as yaml_load
 from xml.etree import ElementTree
 
@@ -15,23 +14,19 @@ with open(
         'config.yml'), 'r') as yaml_config:
             config = yaml_load(yaml_config)
 
-# Подготовка аргументов командной строки
-argparser = argparse.ArgumentParser(description='Загрузить обновления с Lostfilm.TV RSS ленты')
-argparser.add_argument('--log-level', help='debug level', type=str,
-                       choices=['debug', 'info', 'warning', 'error'], default='debug')
-argparser.add_argument('--log-save', help='save log file', action="store_true")
-args = argparser.parse_args()
-
 # настройка логирования
-if args.log_save:
-    logging.basicConfig(
-        filename=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'rss.log'),
-        format='%(asctime)s %(message)s',
-        stream=stdout,
-        level=args.log_level.upper()
-    )
-else:
-    logging.basicConfig(level=args.log_level.upper())
+logging.basicConfig(
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    level=config['verbose'].upper(),
+    handlers=[
+        RotatingFileHandler(
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), config['log']['path']),
+            maxBytes=config['log']['maxBytes'],
+            backupCount=config['log']['backupCount']
+        ),
+    ]
+)
+
 
 # Cookie для авторизации на трекере
 cookies = ';'.join([cookie + '=' + str(config['auth'][cookie]) for cookie in config['auth']])
@@ -53,7 +48,8 @@ def transmission_rpc_request(rpc_data) -> json:
             transmission_url,
             data=rpc_data,
             headers={'X-Transmission-Session-Id': transmission_session_id},
-            auth=(config['transmission']['user'], config['transmission']['password'])
+            auth=(config['transmission']['user'], config['transmission']['password']),
+            timeout=config['timeout']
         )
         if torrent_request.status_code == 200:
             break
@@ -117,7 +113,9 @@ else:
 logging.debug("Каталог: " + str(catalog))
 
 # Запрос RSS ленты
-list_request = requests.get(config['url'])
+list_request = requests.get(
+    config['url'],
+    timeout=config['timeout'])
 list_request.encoding = 'utf-8'
 rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('item')
 
