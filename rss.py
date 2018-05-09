@@ -124,12 +124,12 @@ for item in rss_items:
     title = item.find('title').text
     link = item.find('link').text
 
-    search_real_name = re.search("(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
+    search_real_name = re.search(r"(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
         if (
-            real_name not in config['subscriptions'] and
-            real_name not in config['subscriptions_season']
+            real_name not in config['subscriptions']
+            and real_name not in config['subscriptions_season']
         ):
             logging.debug("Не подписан <{real_name}>: {title}".format(
                           real_name=real_name,
@@ -139,21 +139,20 @@ for item in rss_items:
         logging.warning("Не получилось найти имя: " + title)
         continue
 
-    search_quality = re.search("\[.+\]", title)
+    search_quality = re.search(r"\[.+\]", title)
     if search_quality:
         quality = search_quality.group(0).strip('[]')
-        if (real_name in config['subscriptions'] and
-            quality != config['subscriptions'][real_name] or
-            (
-                real_name in config['subscriptions_season'] and
-                quality != config['subscriptions_season'][real_name])):
+        if (real_name in config['subscriptions']
+            and quality != config['subscriptions'][real_name]
+            or (real_name in config['subscriptions_season']
+                and quality != config['subscriptions_season'][real_name])):
             logging.debug("Не то качество <%s>: %s" % (quality, title, ))
             continue
     else:
         logging.warning("Не смог определить качество: " + title)
         continue
 
-    search_series = re.search("\(S[0-9]+E[0-9]+\)", title)
+    search_series = re.search(r"\(S[0-9]+E[0-9]+\)", title)
     if search_series:
         series = search_series.group(0).strip('()')
     else:
