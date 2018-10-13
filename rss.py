@@ -39,12 +39,12 @@ transmission_url = 'http://{host}:{port}/transmission/rpc/'.format(
 transmission_session_id = None
 
 
-def transmission_rpc_request(rpc_data) -> json:
+def transmission_rpc_request(rpc_data: dict) -> dict:
     global transmission_session_id
-    for _ in range(0, 2):
+    for _ in range(2):
         torrent_request = requests.post(
             transmission_url,
-            data=rpc_data,
+            data=json.dumps(rpc_data),
             headers={'X-Transmission-Session-Id': transmission_session_id},
             auth=(config['transmission']['user'], config['transmission']['password']),
             timeout=config['timeout']
@@ -66,12 +66,12 @@ def transmission_rpc_request(rpc_data) -> json:
 
 # Запрос директории загрузки по-умолчанию
 request_download_root = transmission_rpc_request(
-    json.dumps({
+    {
         'arguments': {
             'fields': ['download-dir']
         },
         'method': 'session-get'
-    }))
+    })
 if request_download_root['result'] == 'success':
     download_root = Path(request_download_root['arguments']['download-dir'])
     logging.debug("Директория: {}".format(download_root))
@@ -81,12 +81,12 @@ else:
 
 # Формируем каталог уже загруженных файлов
 request_available_torrents = transmission_rpc_request(
-    json.dumps({
+    {
         'arguments': {
             'fields': ['name']
         },
         'method': 'torrent-get'
-    })
+    }
 )
 if request_available_torrents['result'] == 'success':
     catalog = dict()
@@ -167,7 +167,7 @@ for item in rss_items:
         )
     ):
         logging.info("Добавляем " + title)
-        torrent_rpc = json.dumps({
+        torrent_rpc = {
             'arguments': {
                 'cookies': cookies,
                 'filename': link,
@@ -175,7 +175,7 @@ for item in rss_items:
                 'download-dir': download_root / real_name.strip('.')
             },
             'method': 'torrent-add'
-        })
+        }
         transmission_rpc_request(torrent_rpc)
     else:
         logging.debug('Пропуск real_name={real_name}, series={series}, quality={quality}'.format(
