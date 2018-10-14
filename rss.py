@@ -59,7 +59,7 @@ def transmission_rpc_request(rpc_data: dict) -> dict:
         if torrent_session_search:
             transmission_session_id = torrent_session_search.group(0).split(':')[1].strip()
     if torrent_request.status_code != 200:
-        logging.error('Не удалось отправить запрос к transmission')
+        logging.error('transmission RPC:{}'.format(torrent_request.status_code))
         exit(torrent_request.status_code)
     return json.loads(torrent_request.text)
 
@@ -76,7 +76,7 @@ if request_download_root['result'] == 'success':
     download_root = Path(request_download_root['arguments']['download-dir'])
     logging.debug("Директория: {}".format(download_root))
 else:
-    logging.error('Не удалось отправить запрос к transmission')
+    logging.error('transmission RPC: {}'.format(request_download_root))
     exit(1)
 
 # Формируем каталог уже загруженных файлов
@@ -172,7 +172,7 @@ for item in rss_items:
                 'cookies': cookies,
                 'filename': link,
                 # Имя директории не может оканчиваться точкой
-                'download-dir': download_root / real_name.strip('.')
+                'download-dir': str(download_root / real_name.strip('.'))
             },
             'method': 'torrent-add'
         }
