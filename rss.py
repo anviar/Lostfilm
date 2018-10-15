@@ -93,10 +93,14 @@ if request_available_torrents['result'] == 'success':
     for job in request_available_torrents['arguments']['torrents']:
         if 'LostFilm' not in job['name']:
             continue
-        data = job['name'].split('.rus.LostFilm.TV.')[0]
-        quality = data.split('.')[-1]
-        series = data.split('.')[-2]
-        name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
+        if ' - LostFilm.TV' in job['name']:
+            name = ' '.join(job['name'].split(' - LostFilm.TV')[0].split()[:-1])
+            series = 'S{:02d}E99'.format(int(job['name'].split(' - LostFilm.TV')[0].split()[-1]))
+        else:
+            data = job['name'].split('.rus.LostFilm.TV.')[0]
+            series = data.split('.')[-2]
+            quality = data.split('.')[-1]
+            name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
         # Обработка нестандартного именования серий
         if name in config['aliases']:
             name = config['aliases'][name]
@@ -119,22 +123,17 @@ rss_items = ElementTree.fromstring(list_request.text).find('channel').findall('i
 for item in rss_items:
     title = item.find('title').text
     link = item.find('link').text
+    quality = item.find('category').text.strip('[]')
 
     # Парсинг атрибутов раздачи
     search_real_name = re.search(r"(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
     if search_real_name:
         real_name = search_real_name.group(0).strip('()')
-        search_quality = re.search(r"\[.+\]", title)
-        if search_quality:
-            quality = search_quality.group(0).strip('[]')
-            search_series = re.search(r"\(S[0-9]+E[0-9]+\)", title)
-            if search_series:
-                series = search_series.group(0).strip('()')
-            else:
-                logging.warning("Не смог найти серию: " + title)
-                continue
+        search_series = re.search(r"\(S[0-9]+E[0-9]+\)", title)
+        if search_series:
+            series = search_series.group(0).strip('()')
         else:
-            logging.warning("Не смог определить качество: " + title)
+            logging.warning("Не смог найти серию: " + title)
             continue
     else:
         logging.warning("Не получилось найти имя: " + title)
@@ -148,12 +147,12 @@ for item in rss_items:
                 (
                     quality == config['download_all_seasons'] or
                     (
+                        'subscriptions_season' in config and
                         real_name in config['subscriptions_season'] and
                         quality == config['subscriptions_season'][real_name]
                     )
                 )
             ) or
-
             # Подписка на каждую серию отдельно
             (
                 real_name in config['subscriptions'] and
@@ -167,6 +166,9 @@ for item in rss_items:
         )
     ):
         logging.info("Добавляем " + title)
+        logging.debug('real_name={}, series={}, quality={}'.format(
+            real_name, series, quality
+        ))
         torrent_rpc = {
             'arguments': {
                 'cookies': cookies,
