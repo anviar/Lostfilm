@@ -145,9 +145,15 @@ for item in rss_items:
             (
                 series.endswith('E99') and
                 (
-                    quality == config['download_all_seasons'] or
                     (
-                        'subscriptions_season' in config and
+                        # Качаем все завершённые сезоны
+                        isinstance(config['subscriptions_season'], str) and
+                        quality == config['subscriptions_season']
+                    )
+                    or
+                    (
+                        # Качаем только нужные сезоны
+                        isinstance(config['subscriptions_season'], dict) and
                         real_name in config['subscriptions_season'] and
                         quality == config['subscriptions_season'][real_name]
                     )
@@ -164,6 +170,7 @@ for item in rss_items:
             real_name in catalog and
             series in catalog[real_name]
         )
+        and real_name not in config['blacklist']
     ):
         logging.info("Добавляем " + title)
         logging.debug('real_name={}, series={}, quality={}'.format(
