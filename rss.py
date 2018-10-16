@@ -18,7 +18,7 @@ logging.basicConfig(
     level=config['verbose'].upper(),
     handlers=[
         RotatingFileHandler(
-            Path(__file__).resolve().parent / config['log']['path'],
+            Path(__file__).resolve().parent / 'rss.log',
             maxBytes=config['log']['maxBytes'],
             backupCount=config['log']['backupCount']
         ),
@@ -61,7 +61,11 @@ def transmission_rpc_request(rpc_data: dict) -> dict:
     if torrent_request.status_code != 200:
         logging.error('transmission RPC:{}'.format(torrent_request.status_code))
         exit(torrent_request.status_code)
-    return json.loads(torrent_request.text)
+    response = json.loads(torrent_request.text)
+    if response['result'] != 'success':
+        logging.error('transmission RPC: {}'.format(response))
+        exit(1)
+    return response
 
 
 # Запрос директории загрузки по-умолчанию
@@ -72,12 +76,10 @@ request_download_root = transmission_rpc_request(
         },
         'method': 'session-get'
     })
-if request_download_root['result'] == 'success':
-    download_root = Path(request_download_root['arguments']['download-dir'])
-    logging.debug("Директория: {}".format(download_root))
-else:
-    logging.error('transmission RPC: {}'.format(request_download_root))
-    exit(1)
+
+download_root = Path(request_download_root['arguments']['download-dir'])
+logging.debug("Директория: {}".format(download_root))
+
 
 # Формируем каталог уже загруженных файлов
 request_available_torrents = transmission_rpc_request(
@@ -88,29 +90,26 @@ request_available_torrents = transmission_rpc_request(
         'method': 'torrent-get'
     }
 )
-if request_available_torrents['result'] == 'success':
-    catalog = dict()
-    for job in request_available_torrents['arguments']['torrents']:
-        if 'LostFilm' not in job['name']:
-            continue
-        if ' - LostFilm.TV' in job['name']:
-            name = ' '.join(job['name'].split(' - LostFilm.TV')[0].split()[:-1])
-            series = 'S{:02d}E99'.format(int(job['name'].split(' - LostFilm.TV')[0].split()[-1]))
-        else:
-            data = job['name'].split('.rus.LostFilm.TV.')[0]
-            series = data.split('.')[-2]
-            quality = data.split('.')[-1]
-            name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
-        # Обработка нестандартного именования серий
-        if name in config['aliases']:
-            name = config['aliases'][name]
-        if name not in catalog:
-            catalog.update({name: {series}})
-        else:
-            catalog[name].add(series)
-else:
-    logging.error('Не удалось отправить запрос к transmission')
-    exit(1)
+
+catalog = dict()
+for job in request_available_torrents['arguments']['torrents']:
+    if 'LostFilm' not in job['name']:
+        continue
+    if ' - LostFilm.TV' in job['name']:
+        name = ' '.join(job['name'].split(' - LostFilm.TV')[0].split()[:-1])
+        series = 'S{:02d}E99'.format(int(job['name'].split(' - LostFilm.TV')[0].split()[-1]))
+    else:
+        data = job['name'].split('.rus.LostFilm.TV.')[0]
+        series = data.split('.')[-2]
+        quality = data.split('.')[-1]
+        name = data.replace(quality, '').replace(series, '').strip('.').replace('.', ' ')
+    # Обработка нестандартного именования серий
+    if name in config['aliases']:
+        name = config['aliases'][name]
+    if name not in catalog:
+        catalog.update({name: {series}})
+    else:
+        catalog[name].add(series)
 logging.debug("Каталог: {}".format(catalog))
 
 # Запрос RSS ленты
@@ -176,7 +175,7 @@ for item in rss_items:
         logging.debug('real_name={}, series={}, quality={}'.format(
             real_name, series, quality
         ))
-        torrent_rpc = {
+        transmission_rpc_request({
             'arguments': {
                 'cookies': cookies,
                 'filename': link,
@@ -184,8 +183,7 @@ for item in rss_items:
                 'download-dir': str(download_root / real_name.strip('.'))
             },
             'method': 'torrent-add'
-        }
-        transmission_rpc_request(torrent_rpc)
+        })
     else:
         logging.debug('Пропуск real_name={real_name}, series={series}, quality={quality}'.format(
             real_name=real_name,
