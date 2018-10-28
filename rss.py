@@ -59,7 +59,7 @@ def transmission_rpc_request(rpc_data: dict) -> dict:
         if torrent_session_search:
             transmission_session_id = torrent_session_search.group(0).split(':')[1].strip()
     if torrent_request.status_code != 200:
-        logging.error('transmission RPC:{}'.format(torrent_request.status_code))
+        logging.error('transmission RPC: {}'.format(torrent_request))
         exit(torrent_request.status_code)
     response = json.loads(torrent_request.text)
     if response['result'] != 'success':
@@ -148,8 +148,7 @@ for item in rss_items:
                         # Качаем все завершённые сезоны
                         isinstance(config['subscriptions_season'], str) and
                         quality == config['subscriptions_season']
-                    )
-                    or
+                    ) or
                     (
                         # Качаем только нужные сезоны
                         isinstance(config['subscriptions_season'], dict) and
@@ -168,13 +167,11 @@ for item in rss_items:
         (
             real_name in catalog and
             series in catalog[real_name]
-        )
-        and real_name not in config['blacklist']
+        ) and
+        real_name not in config['blacklist']
     ):
         logging.info("Добавляем " + title)
-        logging.debug('real_name={}, series={}, quality={}'.format(
-            real_name, series, quality
-        ))
+        logging.debug(f'real_name={real_name}, series={series}, quality={quality}')
         transmission_rpc_request({
             'arguments': {
                 'cookies': cookies,
@@ -185,7 +182,4 @@ for item in rss_items:
             'method': 'torrent-add'
         })
     else:
-        logging.debug('Пропуск real_name={real_name}, series={series}, quality={quality}'.format(
-            real_name=real_name,
-            series=series,
-            quality=quality))
+        logging.debug(f'Пропуск real_name={real_name}, series={series}, quality={quality}')
