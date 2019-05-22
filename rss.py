@@ -10,7 +10,7 @@ from xml.etree import ElementTree
 
 # Парсинг настроек
 with open(Path(__file__).resolve().parent / 'config.yml', 'r') as yaml_config:
-            config = yaml_load(yaml_config)
+    config = yaml_load(yaml_config)
 
 # настройка логирования
 logging.basicConfig(
@@ -125,17 +125,17 @@ for item in rss_items:
     quality = item.find('category').text.strip('[]')
 
     # Парсинг атрибутов раздачи
-    search_real_name = re.search(r"(?!S[0-9]+E[0-9]+)(\([a-zA-Z0-9. ']+\))", title)
+    search_real_name = re.search(r"\(.+\)\.", title)
     if search_real_name:
-        real_name = search_real_name.group(0).strip('()')
+        real_name = search_real_name.group(0).strip('().')
         search_series = re.search(r"\(S[0-9]+E[0-9]+\)", title)
         if search_series:
             series = search_series.group(0).strip('()')
         else:
-            logging.warning("Не смог найти серию: " + title)
+            logging.warning(f"Не смог найти серию: {title}")
             continue
     else:
-        logging.warning("Не получилось найти имя: " + title)
+        logging.warning(f"Не получилось найти имя: {title}")
         continue
 
     if (
@@ -170,7 +170,7 @@ for item in rss_items:
         ) and
         real_name not in config['blacklist']
     ):
-        logging.info("Добавляем " + title)
+        logging.info(f"Добавляем {title}")
         logging.debug(f'real_name={real_name}, series={series}, quality={quality}')
         transmission_rpc_request({
             'arguments': {
